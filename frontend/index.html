@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Habit Tracker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 0 10px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+        }
+        #habitForm {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        #habitName {
+            flex-grow: 1;
+            padding: 8px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            padding: 8px 12px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .habit {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+            padding: 10px;
+            background-color: white;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .completed {
+            text-decoration: line-through;
+            color: #7f8c8d;
+        }
+        .delete-btn {
+            background-color: #e74c3c;
+            padding: 4px 8px;
+            font-size: 12px;
+        }
+        .delete-btn:hover {
+            background-color: #c0392b;
+        }
+        #progress {
+            text-align: center;
+            font-weight: bold;
+            margin-top: 20px;
+            color: #2c3e50;
+        }
+        .empty-state {
+            text-align: center;
+            color: #7f8c8d;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>My Habit Tracker</h1>
+    <form id="habitForm">
+        <input type="text" id="habitName" placeholder="Enter a habit (e.g., Read 10 pages)" required>
+        <button type="submit">Add Habit</button>
+    </form>
+    <div id="habitList"></div>
+    <p id="progress">Progress: 0/0</p>
+
+    <script>
+        const API_URL = 'http://localhost:5000/habits'; // Update this to your deployed backend URL later
+        const SECRET_KEY = 'mysecretkey123';
+        let habits = [];
+        const today = new Date().toDateString();
+
+        const habitForm = document.getElementById('habitForm');
+        const habitList = document.getElementById('habitList');
+        const progress = document.getElementById('progress');
+
+        // Fetch habits
+        async function fetchHabits() {
+            const res = await fetch(API_URL, {
+                headers: { 'x-secret-key': SECRET_KEY }
+            });
+            habits = await res.json();
+            // Reset if date changed
+            const needsReset = habits.length > 0 && habits[0].date !== today;
+            if (needsReset) {
+                await Promise.all(habits.map(h => toggleHabit(h._id, false)));
+            }
+            renderHabits();
+        }
+
+        // Render habits
+        function renderHabits() {
+            habitList.innerHTML = '';
+            if (habits.length === 0) {
+                habitList.innerHTML = '<p class="empty-state">No habits yet—add one to start!</p>';
+            } else {
+                habits.forEach(habit => {
+                    const div = document.createElement('div');
+                    div.className = 'habit';
+                    
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.checked = habit.completed && habit.date === today;
+                    checkbox.addEventListener('change', () => toggleHabit(habit._id, !checkbox.checked));
+                    
+                    const span = document.createElement('span');
+                    span.textContent = habit.name;
+                    if (checkbox.checked) span.className = 'completed';
+                    
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.textContent = 'Delete';
+                    deleteBtn.className = 'delete-btn';
+                    deleteBtn.addEventListener('click', () => deleteHabit(habit._id));
+                    
+                    div.appendChild(checkbox);
+                    div.appendChild(span);
+                    div.appendChild(deleteBtn);
+                    habitList.appendChild(div);
+                });
+            }
+            updateProgress();
+        }
+
+        // Add new habit
+        habitForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const habitName = document.getElementById('habitName').value.trim();
+            if (habitName) {
+                const res = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-secret-key': SECRET_KEY
+                    },
+                    body: JSON.stringify({ name: habitName, completed: false, date: today })
+                });
+                if (res.ok) {
+                    document.getElementById('habitName').value = '';
+                    await fetchHabits();
+                } else {
+                    alert('Failed to add habit');
+                }
+            } else {
+                alert('Please enter a habit name!');
+            }
+        });
+
+        // Toggle habit completion
+        async function toggleHabit(id, completed) {
+            const res = await fetch(`${API_URL}/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-secret-key': SECRET_KEY
+                },
+                body: JSON.stringify({ completed, date: today })
+            });
+            if (res.ok) await fetchHabits();
+        }
+
+        // Delete habit
+        async function deleteHabit(id) {
+            const res = await fetch(`${API_URL}/${id}`, {
+                method: 'DELETE',
+                headers: { 'x-secret-key': SECRET_KEY }
+            });
+            if (res.ok) await fetchHabits();
+        }
+
+        // Update progress
+        function updateProgress() {
+            const completed = habits.filter(h => h.completed && h.date === today).length;
+            progress.textContent = `Progress: ${completed}/${habits.length}`;
+        }
+
+        // Initial fetch
+        fetchHabits();
+    </script>
+</body>
+</html>
